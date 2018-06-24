@@ -143,11 +143,11 @@
 	- 若进程的有效组ID或者进程的附属组ID之一等于文件的组ID：
 		- 如果该文件的组读权限开放，则内核允许进程读该文件
 		- 如果该文件的组写权限开放，则内核允许进程写该文件
-		- 如果该文件的用户执行权限开放，则内核允许进程执行该文件
+		- 如果该文件的组执行权限开放，则内核允许进程执行该文件
 	- 否则：
 		- 如果该文件的其他读权限开放，则内核允许进程读该文件
 		- 如果该文件的其他写权限开放，则内核允许进程写该文件
-		- 如果该文件的其他户执行权限开放，则内核允许进程执行该文件
+		- 如果该文件的其他执行权限开放，则内核允许进程执行该文件
 
 	只要有一个权限通过，则不再进行测试。若所有权限都不通过，则不允许访问。
 
@@ -958,40 +958,82 @@ void test_utimes()
 5. 示例： 在`main`函数中调用 `test_dir_operations` 函数：
 
 	```
-void test_dir_operations()
-{
-    M_TRACE("---------  Begin test_dir_operations()  ---------\n");
-    //*** 创建目录 ****
-    My_mkdir("test",S_IRWXU);
-    My_mkdir("test/test1",S_IRWXU);
+    void test_dir_operations()
+    {
+        M_TRACE("---------  Begin test_dir_operations()  ---------\n");
+        //*** 创建目录 ****
+        My_mkdir("test",S_IRWXU);
+        My_mkdir("test/test1",S_IRWXU);
 
-    //*** 创建文件
-    prepare_file("test/tfile_1",NULL,0,S_IRWXU);
-    prepare_file("test/tfile_2",NULL,0,S_IRWXU);
-    prepare_file("test/tfile_3",NULL,0,S_IRWXU);
-    prepare_file("test/test1/tfile_11",NULL,0,S_IRWXU);
-    prepare_file("test/test1/tfile_22",NULL,0,S_IRWXU);
-    prepare_file("test/test1/tfile_33",NULL,0,S_IRWXU);
+        //*** 创建文件
+        prepare_file("test/tfile_1",NULL,0,S_IRWXU);
+        prepare_file("test/tfile_2",NULL,0,S_IRWXU);
+        prepare_file("test/tfile_3",NULL,0,S_IRWXU);
+        prepare_file("test/test1/tfile_11",NULL,0,S_IRWXU);
+        prepare_file("test/test1/tfile_22",NULL,0,S_IRWXU);
+        prepare_file("test/test1/tfile_33",NULL,0,S_IRWXU);
 
-    print_dir("test");
+        print_dir("test");
 
-    print_cwd();
-    My_chdir("test");
-    print_cwd();
-    My_chdir("../"); // 切换回来，否则后面的删除文件都会失败（因为都是相对路径）
-    print_cwd();
-    //***** 清理
-    My_rmdir("test"); // 目录非空，删除失败！
-    un_prepare_file("test/tfile_1");
-    un_prepare_file("test/tfile_2");
-    un_prepare_file("test/tfile_3");
-    un_prepare_file("test/test1/tfile_11");
-    un_prepare_file("test/test1/tfile_22");
-    un_prepare_file("test/test1/tfile_33");
-    My_rmdir("test/test1"); // 必须非空才能删除成功
-    My_rmdir("test"); // 必须非空才能删除成功
-    M_TRACE("---------  End test_dir_operations()  ---------\n\n");
-}
+        print_cwd();
+        My_chdir("test");
+        print_cwd();
+        My_chdir("../"); // 切换回来，否则后面的删除文件都会失败（因为都是相对路径）
+        print_cwd();
+        //***** 清理
+        My_rmdir("test"); // 目录非空，删除失败！
+        un_prepare_file("test/tfile_1");
+        un_prepare_file("test/tfile_2");
+        un_prepare_file("test/tfile_3");
+        un_prepare_file("test/test1/tfile_11");
+        un_prepare_file("test/test1/tfile_22");
+        un_prepare_file("test/test1/tfile_33");
+        My_rmdir("test/test1"); // 必须非空才能删除成功
+        My_rmdir("test"); // 必须非空才能删除成功
+        M_TRACE("---------  End test_dir_operations()  ---------\n\n");
+    }
 	```
 
-	  ![dir_function](../imgs/file_dir/dir_function.JPG) 
+书后练习题:
+4.4 创建文件foo和bar后,下面程序,会发生什么?
+    ```
+    int main(void)
+    {
+        umask(0);
+        if (creat("foo", RWRWRW) < 0)
+            err_sys("creat error for foo");
+        umask(S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+        if (creat("bar", RWRWRW) < 0)
+            err_sys("creat error for bar");
+        exit(0);
+    }
+    ```
+    解析: 如果用open()或creat()创建已经存在的文件,则文件的访问权限不变,但文件长度截断了.
+
+4.5 stat结构成员st_size表示以字节为单位的文件长度,此字段只对普通文件,目录文件,符号链接有意义.普通文件的长度可以为0,那么目录文件和符号链接文件的长度可否为0?
+    解析: 目录包含.和..两项;符号链接长度指其路径包含字符数,路径名至少为1.
+
+4.8 在下面程序中,使用了df命令来检查空闲的磁盘空间,为什么不使用du命令?
+    ```
+    int main(void)
+    {
+        if (open("tempfile", O_RDWR) < 0)
+            err_sys("open error");
+        if (unlink("tempfile") < 0)
+            err_sys("unlink error");
+        printf("file unlinked\n");
+        sleep(15);
+        printf("done\n");
+        exit(0);
+    }
+
+    $ df /home
+    ```
+    解析: du命令需要文件名,只有当unlink函数返回时才释放tempfile的目录项,du . 命令没有计算仍然被tempfile占用的空间.
+
+    du和df命令的区别: du命令是用户级的程序，它不考虑Meta Data，而df命令则查看文件系统的磁盘分配图并考虑Meta Data。df命令获得真正的文件系统数据，而du命令只查看文件系统的部分情况。
+        * df = disk free
+        * du = disk usage
+
+4.9 unlink函数会修改文件状态改变时间,这是怎样发生的?
+    解析: 如果被删除的链接不是该文件的最后一个链接,则不会删除文件,此时,文件状态信息会改变.如果别删除的链接是最后一个链接,则该文件会被物理删除,再去更改文件的状态改变时间没有意义.
